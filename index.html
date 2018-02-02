@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.3.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.3.1/dist/leaflet.js"></script>
+    <link href="https://fonts.googleapis.com/css?family=Montserrat" rel="stylesheet">
+    <style>
+        #map {
+            width: 80%;
+            max-width: 1480px;
+            margin: auto;
+            height: 500px;
+        }
+
+        pre {
+            margin: 0;
+            padding: 0;
+            transform: scale(0.229, .21299);
+            line-height: 8px;
+            letter-spacing: .252px;
+            transform-origin: 0 0;
+        }
+
+        .wrapper {
+            width: 256px;
+            height: 256px;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: 'Montserrat', sans-serif;
+        }
+
+        main {
+            text-align: center;
+        }
+    </style>
+</head>
+
+<!-- Image to String library -->
+<script>
+    /**
+     * Jscii - Image to ASCII converter
+     * http://enotionz.github.com/jscii/
+     * Author: Dominick Pham (@enotionz | http://dph.am)
+     */
+    (function () {
+        /**
+         * value to character mapping from dark to light
+         * add more characters and they will be accounted for automatically
+         * note: the extra &nbsp; is to account for the value range inclusive of 100%
+         */
+        var chars = ['@', '#', '$', '=', '*', '!', ';', ':', '~', '-', ',', '.', '&nbsp;', '&nbsp;'];
+        var charLen = chars.length - 1;
+        function getChar(val) { return chars[parseInt(val * charLen, 10)]; }
+
+        /**
+         * Options:
+         * el        - DOM node (img or video)
+         * fn        - function, callback to fire during a render with ascii string as arguments[0]
+         */
+        function Jscii(params) {
+
+            this.el = params.el;
+            this.fn = typeof params.fn === 'function' ? params.fn : null;
+            this.width = typeof params.width === 'number' ? params.width : 150;
+
+            this.canvas = document.createElement('canvas');
+            this.ctx = this.canvas.getContext('2d');
+
+            return this.render();
+        }
+
+        /**
+         * getter/setter for output dimension
+         */
+        Jscii.prototype.dimension = function (width, height) {
+            if (typeof width === 'number' && typeof height === 'number') {
+                this._scaledWidth = this.canvas.width = width;
+                this._scaledHeight = this.canvas.height = height;
+                return this;
+            }
+            return { width: this._scaledWidth, height: this._scaledHeight };
+        };
+
+        /**
+         * gets context image data, perform ascii conversion, append string to container
+         */
+        Jscii.prototype.render = function () {
+            var el = this.el, nodeName = el.nodeName, ratio;
+            var dim = this.dimension(), width, height;
+            if (!dim.width || !dim.height) {
+                ratio = el.height / el.width;
+                this.dimension(this.width, parseInt(this.width * ratio, 10));
+                dim = this.dimension();
+            }
+            width = dim.width;
+            height = dim.height;
+
+            // might take a few cycles before we
+            if (!width || !height) return;
+
+            this.ctx.drawImage(this.el, 0, 0, width, height);
+            this.imageData = this.ctx.getImageData(0, 0, width, height).data;
+            var asciiStr = this.getAsciiString();
+            if (this.fn) this.fn(asciiStr);
+            return asciiStr;
+        };
+
+        /**
+         * given a picture/frame's pixel data and a defined width and height
+         * return the ASCII string representing the image
+         */
+        Jscii.prototype.getAsciiString = function () {
+            var dim = this.dimension(), width = dim.width, height = dim.height;
+            var len = width * height, d = this.imageData, str = '';
+
+            // helper function to retrieve rgb value from pixel data
+            var getRGB = function (i) { return [d[i = i * 4], d[i + 1], d[i + 2]]; };
+
+            for (var i = 0; i < len; i++) {
+                if (i % width === 0) str += '\n';
+                var rgb = getRGB(i);
+                var val = Math.max(rgb[0], rgb[1], rgb[2]) / 255;
+                str += getChar(val);
+            }
+            return str;
+        };
+
+        window.Jscii = Jscii;
+
+    })();
+</script>
+
+<body>
+    <div id="map"></div>
+
+    <main>
+        <h1>ASCII MAP</h1>
+        <h4> A leapfrog by
+            <a href="https://twitter.com/iagolast">@iagolast</a>
+        </h4>
+        <button onclick="window.BASEMAP = 'https://cartodb-basemaps-a.global.ssl.fastly.net/dark_nolabels/'; map.setZoom(map.getZoom() - 1);">DARK THEME</button>
+    </main>
+</body>
+
+<script>
+    window.BASEMAP = 'https://cartodb-basemaps-d.global.ssl.fastly.net/light_nolabels/';
+    var map = L.map('map').setView([42, -8], 4);
+
+    L.GridLayer.Ascii = L.GridLayer.extend({
+        createTile: function (coords) {
+            const wrapper = document.createElement('div');
+            const tile = document.createElement('pre');
+            const img = document.createElement('img');
+            img.crossOrigin = "Anonymous";
+            img.src = `${BASEMAP}${coords.z}/${coords.x}/${coords.y}.png`;
+            img.onload = () => {
+                new Jscii({
+                    el: img,
+                    fn: ascii => {
+                        tile.innerHTML = ascii;
+                    }
+                });
+            }
+            wrapper.appendChild(tile);
+            return wrapper;
+        }
+    });
+
+    L.gridLayer.ascii = function (opts) {
+        return new L.GridLayer.Ascii(opts);
+    };
+
+    map.addLayer(L.gridLayer.ascii());
+</script>
+
+</html>
